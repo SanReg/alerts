@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { MongoClient, ObjectId } from 'mongodb';
 import fetch from 'node-fetch';
 import process from 'process';
+import http from 'http';
 
 const {
   MONGODB_URI,
@@ -12,6 +13,7 @@ const {
   NTFY_TOPIC_TICKETS,
   NTFY_PRIORITY = '4',
   NTFY_AUTH,
+  PORT = '3000',
 } = process.env;
 
 if (!MONGODB_URI) {
@@ -25,6 +27,21 @@ if (!NTFY_TOPIC && !NTFY_TOPIC_ORDERS && !NTFY_TOPIC_TICKETS) {
 
 const server = NTFY_SERVER.replace(/\/$/, '');
 const topicFor = (topic) => `${server}/${topic}`;
+
+// Start health check HTTP server for Render
+const healthServer = http.createServer((req, res) => {
+  if (req.url === '/health' || req.url === '/') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok', service: 'orders-ntfy-notifier' }));
+  } else {
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Not found' }));
+  }
+});
+
+healthServer.listen(PORT, () => {
+  console.log(`Health check server running on port ${PORT}`);
+});
 
 async function main() {
   const client = new MongoClient(MONGODB_URI, {
