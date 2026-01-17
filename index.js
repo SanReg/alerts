@@ -60,6 +60,8 @@ async function main() {
       title: 'CMP New Order',
       tags: 'bell,shopping_cart',
     });
+    // Start monitoring for failed orders
+    startFailedOrdersMonitor(db, topicOrders);
   }
   if (topicTickets) {
     startWatcher(db, 'tickets', topicTickets, {
@@ -178,4 +180,66 @@ function toObjectId(val) {
   if (typeof val === 'object' && val._id instanceof ObjectId) return val._id;
   if (typeof val === 'string' && ObjectId.isValid(val)) return new ObjectId(val);
   return null;
+}
+
+async function startFailedOrdersMonitor(db, topic) {
+  const ordersCollection = db.collection('orders');
+  const topicUrl = topicFor(topic);
+  let lastNotifiedOrderIds = []; // Track the order pair that already sent notification
+
+  // Check every 30 seconds for failed orders
+  setInterval(async () => {
+    try {
+      const recentOrders = await ordersCollection
+        .find({})
+        .sort({ createdAt: -1 })
+        .limit(2)
+        .toArray();
+
+      if (recentOrders.length === 2) {
+        // Check if both recent orders are failed
+        const allFailed = recentOrders.every(order => 
+          order.status === 'failed' || order.status === 'error'
+        );
+
+        if (allFailed) {
+          // Get current order IDs
+          const currentOrderIds = recentOrders.map(order => order._id.toString()).sort().join(',');
+          const lastOrderIds = lastNotifiedOrderIds.sort().join(',');
+
+          // Only send notification if this is a different order pair
+          if (currentOrderIds !== lastOrderIds) {
+            lastNotifiedOrderIds = recentOrders.map(order => order._id.toString());
+
+            const bodyText = [
+              '⚠️ ALERT: Recent 2 orders have FAILED!',
+              'Please check immediately!',
+            ].join('\n');
+
+            const headers = {
+              Title: 'CMP - Multiple Order Failures',
+              Priority: '5', // High priority
+              Tags: 'bell,x,warning',
+              'Content-Type': 'text/plain',
+            };
+            if (NTFY_AUTH) headers['Authorization'] = NTFY_AUTH;
+
+            const resp = await fetch(topicUrl, {
+              method: 'POST',
+              headers,
+              body: bodyText,
+            });
+
+            if (!resp.ok) {
+              console.error('Failed orders alert failed', resp.status, await resp.text());
+            } else {
+              console.log('⚠️ Sent failed orders alert notification');
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error checking failed orders', err);
+    }
+  }, 30000); // Check every 30 seconds
 }
