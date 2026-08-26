@@ -112,7 +112,9 @@ function startWatcher(db, collectionName, topic, opts) {
         Tags: opts.tags,
         'Content-Type': 'text/plain',
       };
-      if (NTFY_AUTH) headers['Authorization'] = NTFY_AUTH;
+      if (NTFY_AUTH) {
+        headers['Authorization'] = NTFY_AUTH.startsWith('Bearer ') || NTFY_AUTH.startsWith('Basic ') ? NTFY_AUTH : `Bearer ${NTFY_AUTH}`;
+      }
       const resp = await fetch(topicUrl, {
         method: 'POST',
         headers,
@@ -251,7 +253,9 @@ async function startFailedOrdersMonitor(db, topic) {
           Tags: 'bell,x,warning',
           'Content-Type': 'text/plain',
         };
-        if (NTFY_AUTH) headers['Authorization'] = NTFY_AUTH;
+        if (NTFY_AUTH) {
+          headers['Authorization'] = NTFY_AUTH.startsWith('Bearer ') || NTFY_AUTH.startsWith('Basic ') ? NTFY_AUTH : `Bearer ${NTFY_AUTH}`;
+        }
 
         const resp = await fetch(topicUrl, {
           method: 'POST',
