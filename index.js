@@ -91,11 +91,21 @@ function startWatcher(db, collectionName, topic, opts) {
       if (!person.name && !person.email) {
         person = extractPerson(doc);
       }
-      const bodyText = [
+      const bodyLines = [
         'Check this new alert on CMP!',
         `👤: ${person.name || 'N/A'}`,
         `📧: ${person.email || 'N/A'}`,
-      ].join('\n');
+      ];
+
+      if (collectionName === 'orders') {
+        const rawFilename = doc.filename || doc.fileName || doc.file || '';
+        if (rawFilename && typeof rawFilename === 'string') {
+          const truncatedFilename = rawFilename.length > 100 ? rawFilename.substring(0, 100) + '...' : rawFilename;
+          bodyLines.push(`📄: ${truncatedFilename}`);
+        }
+      }
+
+      const bodyText = bodyLines.join('\n');
       const headers = {
         Title: opts.title,
         Priority: NTFY_PRIORITY,
@@ -185,57 +195,74 @@ function toObjectId(val) {
 async function startFailedOrdersMonitor(db, topic) {
   const ordersCollection = db.collection('orders');
   const topicUrl = topicFor(topic);
-  let lastNotifiedOrderIds = []; // Track the order pair that already sent notification
+  const notifiedOrderIds = new Set(); 
+
+  // Pre-fill to avoid duplicate notifications on restart
+  try {
+    const initialFailedOrders = await ordersCollection
+      .find({ status: { $in: ['failed', 'error'] } })
+      .sort({ _id: -1 })
+      .limit(10)
+      .toArray();
+    for (const order of initialFailedOrders) {
+      notifiedOrderIds.add(order._id.toString());
+    }
+  } catch (err) {
+    console.error('Error initializing failed orders monitor', err);
+  }
 
   // Check every 30 seconds for failed orders
   setInterval(async () => {
     try {
-      const recentOrders = await ordersCollection
-        .find({})
-        .sort({ createdAt: -1 })
-        .limit(2)
+      const recentFailedOrders = await ordersCollection
+        .find({ status: { $in: ['failed', 'error'] } })
+        .sort({ _id: -1 })
+        .limit(10)
         .toArray();
 
-      if (recentOrders.length === 2) {
-        // Check if both recent orders are failed
-        const allFailed = recentOrders.every(order => 
-          order.status === 'failed' || order.status === 'error'
-        );
+      for (const order of recentFailedOrders) {
+        const oidStr = order._id.toString();
+        
+        if (notifiedOrderIds.has(oidStr)) continue;
+        notifiedOrderIds.add(oidStr);
 
-        if (allFailed) {
-          // Get current order IDs
-          const currentOrderIds = recentOrders.map(order => order._id.toString()).sort().join(',');
-          const lastOrderIds = lastNotifiedOrderIds.sort().join(',');
+        let person = await resolvePerson(db, order);
+        if (!person.name && !person.email) {
+          person = extractPerson(order);
+        }
 
-          // Only send notification if this is a different order pair
-          if (currentOrderIds !== lastOrderIds) {
-            lastNotifiedOrderIds = recentOrders.map(order => order._id.toString());
+        const bodyLines = [
+          '⚠️ ALERT: An order has FAILED!',
+          `👤: ${person.name || 'N/A'}`,
+          `📧: ${person.email || 'N/A'}`,
+        ];
 
-            const bodyText = [
-              '⚠️ ALERT: Recent 2 orders have FAILED!',
-              'Please check immediately!',
-            ].join('\n');
+        const rawFilename = order.filename || order.fileName || order.file || '';
+        if (rawFilename && typeof rawFilename === 'string') {
+          const truncatedFilename = rawFilename.length > 100 ? rawFilename.substring(0, 100) + '...' : rawFilename;
+          bodyLines.push(`📄: ${truncatedFilename}`);
+        }
 
-            const headers = {
-              Title: 'CMP - Multiple Order Failures',
-              Priority: '5', // High priority
-              Tags: 'bell,x,warning',
-              'Content-Type': 'text/plain',
-            };
-            if (NTFY_AUTH) headers['Authorization'] = NTFY_AUTH;
+        const bodyText = bodyLines.join('\n');
 
-            const resp = await fetch(topicUrl, {
-              method: 'POST',
-              headers,
-              body: bodyText,
-            });
+        const headers = {
+          Title: 'CMP - Order Failure',
+          Priority: '5', // High priority
+          Tags: 'bell,x,warning',
+          'Content-Type': 'text/plain',
+        };
+        if (NTFY_AUTH) headers['Authorization'] = NTFY_AUTH;
 
-            if (!resp.ok) {
-              console.error('Failed orders alert failed', resp.status, await resp.text());
-            } else {
-              console.log('⚠️ Sent failed orders alert notification');
-            }
-          }
+        const resp = await fetch(topicUrl, {
+          method: 'POST',
+          headers,
+          body: bodyText,
+        });
+
+        if (!resp.ok) {
+          console.error('Failed order alert failed', resp.status, await resp.text());
+        } else {
+          console.log(`⚠️ Sent failed order alert notification for ${oidStr}`);
         }
       }
     } catch (err) {
