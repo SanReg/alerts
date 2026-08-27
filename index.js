@@ -98,10 +98,12 @@ function startWatcher(db, collectionName, topic, opts) {
       ];
 
       if (collectionName === 'orders') {
-        const rawFilename = doc.filename || doc.fileName || doc.file || '';
+        const rawFilename = doc.filename || doc.fileName || doc.file || doc.userFile?.filename || doc.userFile?.name || '';
         if (rawFilename && typeof rawFilename === 'string') {
           const truncatedFilename = rawFilename.length > 100 ? rawFilename.substring(0, 100) + '...' : rawFilename;
           bodyLines.push(`📄: ${truncatedFilename}`);
+        } else {
+          bodyLines.push(`📄: N/A`);
         }
       }
 
@@ -239,10 +241,12 @@ async function startFailedOrdersMonitor(db, topic) {
           `📧: ${person.email || 'N/A'}`,
         ];
 
-        const rawFilename = order.filename || order.fileName || order.file || '';
+        const rawFilename = order.filename || order.fileName || order.file || order.userFile?.filename || order.userFile?.name || '';
         if (rawFilename && typeof rawFilename === 'string') {
           const truncatedFilename = rawFilename.length > 100 ? rawFilename.substring(0, 100) + '...' : rawFilename;
           bodyLines.push(`📄: ${truncatedFilename}`);
+        } else {
+          bodyLines.push(`📄: N/A`);
         }
 
         const bodyText = bodyLines.join('\n');
