@@ -1,0 +1,18 @@
+version: "3.8"
+
+services:
+  ntfy:
+    image: binwiederhier/ntfy
+    container_name: ntfy_server
+    command: serve
+    environment:
+      - TZ=UTC
+    user: root # Needed if you run into volume permission issues
+    volumes:
+      - ntfy_data:/var/lib/ntfy
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+volumes:
+  ntfy_data:

@@ -10,18 +10,17 @@ const {
   NTFY_SERVER = 'https://ntfy.sh',
   NTFY_TOPIC,
   NTFY_TOPIC_ORDERS,
-  NTFY_TOPIC_TICKETS,
   NTFY_PRIORITY = '4',
   NTFY_AUTH,
-  PORT = '3000',
+  NODE_PORT = '3000',
 } = process.env;
 
 if (!MONGODB_URI) {
   console.error('Missing MONGODB_URI');
   process.exit(1);
 }
-if (!NTFY_TOPIC && !NTFY_TOPIC_ORDERS && !NTFY_TOPIC_TICKETS) {
-  console.error('Missing NTFY_TOPIC (or NTFY_TOPIC_ORDERS/NTFY_TOPIC_TICKETS)');
+if (!NTFY_TOPIC && !NTFY_TOPIC_ORDERS) {
+  console.error('Missing NTFY_TOPIC (or NTFY_TOPIC_ORDERS)');
   process.exit(1);
 }
 
@@ -39,8 +38,8 @@ const healthServer = http.createServer((req, res) => {
   }
 });
 
-healthServer.listen(PORT, () => {
-  console.log(`Health check server running on port ${PORT}`);
+healthServer.listen(NODE_PORT, () => {
+  console.log(`Health check server running on port ${NODE_PORT}`);
 });
 
 async function main() {
@@ -53,7 +52,6 @@ async function main() {
   const db = client.db(DB_NAME);
 
   const topicOrders = NTFY_TOPIC_ORDERS || NTFY_TOPIC;
-  const topicTickets = NTFY_TOPIC_TICKETS || NTFY_TOPIC;
 
   if (topicOrders) {
     startWatcher(db, 'orders', topicOrders, {
@@ -62,12 +60,6 @@ async function main() {
     });
     // Start monitoring for failed orders
     startFailedOrdersMonitor(db, topicOrders);
-  }
-  if (topicTickets) {
-    startWatcher(db, 'tickets', topicTickets, {
-      title: 'CMP Buy Credit Ticket',
-      tags: 'bell,ticket',
-    });
   }
 }
 
