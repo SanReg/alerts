@@ -12,6 +12,9 @@ export NTFY_AUTH_FILE="/var/lib/ntfy/auth.db"
 # We tell your Node.js application to send notifications locally to the ntfy instance!
 export NTFY_SERVER="http://localhost:${PORT:-8080}"
 
+# Required for iOS push notifications (relays background push signal via main ntfy servers)
+export NTFY_UPSTREAM_BASE_URL="https://ntfy.sh"
+
 # Start ntfy server in the background
 ntfy serve &
 
