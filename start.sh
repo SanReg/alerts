@@ -4,8 +4,9 @@
 # We make ntfy listen on this port so it's accessible from the outside.
 export NTFY_LISTEN_HTTP=":${PORT:-8080}"
 
-# If Render provides the public URL, configure ntfy with it
-export NTFY_BASE_URL=${RENDER_EXTERNAL_URL:-"http://localhost:${PORT:-8080}"}
+# If Render provides the public URL, configure ntfy with it, but respect NTFY_BASE_URL if manually set
+export NTFY_BASE_URL=${NTFY_BASE_URL:-${RENDER_EXTERNAL_URL:-"http://localhost:${PORT:-8080}"}}
+
 export NTFY_CACHE_FILE="/var/lib/ntfy/cache.db"
 export NTFY_AUTH_FILE="/var/lib/ntfy/auth.db"
 
